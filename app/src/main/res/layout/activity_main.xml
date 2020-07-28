@@ -27,4 +27,13 @@
         android:textStyle="bold"
         android:text="추가기능리스트"/>
 
+    <Button
+        android:id="@+id/cam_btn"
+        android:layout_width="match_parent"
+        android:layout_height="100dp"
+        android:layout_margin="20dp"
+        android:textSize="20dp"
+        android:textStyle="bold"
+        android:text="카메라와 갤러리"/>
+
 </LinearLayout>

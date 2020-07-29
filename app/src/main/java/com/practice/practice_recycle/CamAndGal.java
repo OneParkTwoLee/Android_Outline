@@ -10,6 +10,8 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.ImageDecoder;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -28,8 +30,8 @@ import java.util.Date;
 
 public class CamAndGal extends AppCompatActivity {
 
-    static final int REQUEST_IMAGE_CAPTURE = 1;
-    static final int REQUEST_TAKE_PHOTO = 1;
+    static final int REQUEST_IMAGE_CAPTURE = 1; // 카메라 미리보기 이미지(= 저장하지 않은 사진)
+    static final int REQUEST_TAKE_PHOTO = 1;    // 촬영 후 원본 이미지(= 저장된 사진)
     String currentPhotoPath;
 
     private Button DialogBtn;
@@ -41,7 +43,7 @@ public class CamAndGal extends AppCompatActivity {
         setContentView(R.layout.activity_cam_and_gal);
 
         // 화면 연결
-        DialogBtn = findViewById(R.id.cam_btn);
+        DialogBtn = findViewById(R.id.takePicBtn);
         imageView = findViewById(R.id.imageView);
 
         // 6.0 마쉬멜로우 이상일 경우에 권한 체크 후 권한 요청
@@ -57,36 +59,61 @@ public class CamAndGal extends AppCompatActivity {
         DialogBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(CamAndGal.this);
+
+                AlertDialog.Builder builder = new AlertDialog.Builder(CamAndGal.this);
                 View view = LayoutInflater.from(CamAndGal.this).inflate(R.layout.activity_dialog_cam, null, false);
                 builder.setView(view);
 
-                final Button CameraBtn = view.findViewById(R.id.cameraBtn);
-                final Button GalleryBtn = view.findViewById(R.id.galleryBtn);
+                final Button LinkCameraBtn = view.findViewById(R.id.cameraBtn);
+                final Button LinkGalleryBtn = view.findViewById(R.id.galleryBtn);
                 final AlertDialog dialog = builder.create();
 
-                CameraBtn.setOnClickListener(new View.OnClickListener() {
+                LinkCameraBtn.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-                        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
-                            startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
-                        }
-
+                        dispatchTakePictureIntent();
                         dialog.dismiss();
                     }
                 });
 
-                GalleryBtn.setOnClickListener(new View.OnClickListener() {
+                LinkGalleryBtn.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
                         dialog.dismiss();
                     }
                 });
-                dialog.show();
+
+             dialog.show();
             }
         });
 
+    }
+
+    // 카메라 앱 intent 함수
+    /*
+    private void dispatchTakePictureIntent() {
+        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+            startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
+        }
+    }
+    */
+
+    private void dispatchTakePictureIntent() {
+        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+            File photoFile = null;
+            try {
+                photoFile = createImageFile();
+            } catch (IOException ex) {
+            }
+            if (photoFile != null) {
+                Uri photoURI = FileProvider.getUriForFile(this,
+                        "com.practice.practice_recycle.fileprovider", photoFile);
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
+                startActivityForResult(takePictureIntent, REQUEST_TAKE_PHOTO);
+            }
+        }
     }
 
     //권한 요청
@@ -99,16 +126,57 @@ public class CamAndGal extends AppCompatActivity {
         }
     }
 
-    // 미리보기 이미지 가져오는 함수
+    // 화면에 이미지 가져오는 함수
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
-            Bundle extras = data.getExtras();
-            Bitmap imageBitmap = (Bitmap) extras.get("data");
-            imageView.setImageBitmap(imageBitmap);
+        try {
+            switch (requestCode) {
+                case REQUEST_TAKE_PHOTO: {
+                    if (resultCode == RESULT_OK) {
+                        File file = new File(currentPhotoPath);
+                        Bitmap bitmap = null;
+                        if(Build.VERSION.SDK_INT < 28){
+                            bitmap = MediaStore.Images.Media
+                                    .getBitmap(getContentResolver(), Uri.fromFile(file));
+                        } else{
+                            ImageDecoder.Source source = ImageDecoder.createSource(this.getContentResolver(),Uri.fromFile(file));
+                            bitmap = ImageDecoder.decodeBitmap(source);
+                        }
+                        if (bitmap != null) {
+                            imageView.setImageBitmap(bitmap);
+                        }
+                    }
+                    break;
+                }
+            }
+
+        } catch (Exception error) {
+            error.printStackTrace();
         }
     }
+
+    // 촬영 이미지를 파일로 저장하는 함수
+    private File createImageFile() throws IOException {
+        // Create an image file name
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String imageFileName = "JPEG_" + timeStamp + "_";
+        File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        File image = File.createTempFile(
+                imageFileName,  /* prefix */
+                ".jpg",         /* suffix */
+                storageDir      /* directory */
+        );
+
+        currentPhotoPath = image.getAbsolutePath();
+        return image;
+    }
+
+
+
+
+
+
 
 
 }

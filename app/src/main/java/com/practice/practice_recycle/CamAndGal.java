@@ -12,6 +12,8 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.ImageDecoder;
+import android.graphics.Matrix;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -24,6 +26,8 @@ import android.widget.Button;
 import android.widget.ImageView;
 
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -31,7 +35,8 @@ import java.util.Date;
 public class CamAndGal extends AppCompatActivity {
 
     static final int REQUEST_IMAGE_CAPTURE = 1; // 카메라 미리보기 이미지(= 저장하지 않은 사진)
-    static final int REQUEST_TAKE_PHOTO = 1;    // 촬영 후 원본 이미지(= 저장된 사진)
+    static final int REQUEST_TAKE_PHOTO = 1;        // 촬영 후 원본 이미지(= 저장된 사진)
+    private static final int PICK_FROM_ALBUM = 2;   // 갤러리 이미지
     String currentPhotoPath;
 
     private Button DialogBtn;
@@ -89,15 +94,6 @@ public class CamAndGal extends AppCompatActivity {
 
     }
 
-    // 카메라 앱 intent 함수
-    /*
-    private void dispatchTakePictureIntent() {
-        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
-            startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
-        }
-    }
-    */
 
     private void dispatchTakePictureIntent() {
         Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
@@ -136,18 +132,26 @@ public class CamAndGal extends AppCompatActivity {
                     if (resultCode == RESULT_OK) {
                         File file = new File(currentPhotoPath);
                         Bitmap bitmap = null;
-                        if(Build.VERSION.SDK_INT < 28){
-                            bitmap = MediaStore.Images.Media
-                                    .getBitmap(getContentResolver(), Uri.fromFile(file));
-                        } else{
-                            ImageDecoder.Source source = ImageDecoder.createSource(this.getContentResolver(),Uri.fromFile(file));
-                            bitmap = ImageDecoder.decodeBitmap(source);
-                        }
+                        Uri photoUri = null;
+
+                        photoUri = Uri.fromFile(file);
+                        bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), photoUri);
+
                         if (bitmap != null) {
-                            imageView.setImageBitmap(bitmap);
+                            ExifInterface ei = new ExifInterface(currentPhotoPath);
+                            int orientation = ei.getAttributeInt(ExifInterface.TAG_ORIENTATION,
+                                    ExifInterface.ORIENTATION_UNDEFINED);
+                            int exifDegree = exifOrientationToDegrees(orientation);
+                            Log.d("각도", exifDegree+"");
+                            Bitmap rotatedBitmap = rotateImage(bitmap, exifDegree);
+                            imageView.setImageBitmap(rotatedBitmap);
+                            saveImage(rotatedBitmap);
                         }
                     }
                     break;
+                }
+                case PICK_FROM_ALBUM :{
+
                 }
             }
 
@@ -160,20 +164,71 @@ public class CamAndGal extends AppCompatActivity {
     private File createImageFile() throws IOException {
         // Create an image file name
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        String imageFileName = "JPEG_" + timeStamp + "_";
+        String imageFileName =  timeStamp + "_test_";
         File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
         File image = File.createTempFile(
                 imageFileName,  /* prefix */
                 ".jpg",         /* suffix */
                 storageDir      /* directory */
         );
-
+        Log.d("파일", image.toString());
         currentPhotoPath = image.getAbsolutePath();
         return image;
     }
 
+    // 이미지 회전하는 함수
+    public static Bitmap rotateImage(Bitmap source, float angle) {
+        Matrix matrix = new Matrix();
+        matrix.postRotate(angle);
+        Log.d("Rotate", angle+"");
+        return Bitmap.createBitmap(source, 0, 0, source.getWidth(), source.getHeight(), matrix, true);
+    }
+
+    public int exifOrientationToDegrees(int exifOrientation){
+        if(exifOrientation == ExifInterface.ORIENTATION_ROTATE_90){
+            return 90;
+        }
+        else if(exifOrientation == ExifInterface.ORIENTATION_ROTATE_180){
+            return 180;
+        }
+        else if(exifOrientation == ExifInterface.ORIENTATION_ROTATE_270){
+            return 270;
+        }
+        else{
+            return 0;
+        }
+    }
+
+    // 갤러리에 저장하는 함수
+    private void galleryAddPic() {
+        Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+        File f = new File(currentPhotoPath);
+        Uri contentUri = Uri.fromFile(f);
+        mediaScanIntent.setData(contentUri);
+        this.sendBroadcast(mediaScanIntent);
+    }
+
+    private void saveImage(Bitmap finalBitmap){
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String imageFileName =  timeStamp + "_test.jpg";
+        File myDir = new File(Environment.getExternalStorageDirectory().toString());
+        myDir.mkdirs();
+        File file = new File(myDir, imageFileName);
+        try{
+            FileOutputStream out = new FileOutputStream(file);
+            finalBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out);
+            this.sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(file)));
+            out.flush();
+            out.close();;
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
 
+    /* 갤러리 연결하기 */
 
 
 

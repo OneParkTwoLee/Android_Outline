@@ -6,7 +6,7 @@
 - [ ] Making Dynamic RecyclerView 
   * ~~Add, Delete, Fix textviews~~
   * Add, Delete imageviews
-- [ ] Linking Camera & Gallery
+- [x] Linking Camera & Gallery
 - [ ] Making Crop skill
 
 ## Using

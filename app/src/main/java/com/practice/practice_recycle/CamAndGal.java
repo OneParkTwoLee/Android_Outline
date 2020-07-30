@@ -9,6 +9,7 @@ import android.Manifest;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.ImageDecoder;
@@ -29,6 +30,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
@@ -38,6 +40,7 @@ public class CamAndGal extends AppCompatActivity {
     static final int REQUEST_TAKE_PHOTO = 1;        // 촬영 후 원본 이미지(= 저장된 사진)
     private static final int PICK_FROM_ALBUM = 2;   // 갤러리 이미지
     String currentPhotoPath;
+    String imageFileName;
 
     private Button DialogBtn;
     private ImageView imageView;
@@ -73,6 +76,7 @@ public class CamAndGal extends AppCompatActivity {
                 final Button LinkGalleryBtn = view.findViewById(R.id.galleryBtn);
                 final AlertDialog dialog = builder.create();
 
+                // 다이얼로그에서 카메라 선택
                 LinkCameraBtn.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
@@ -81,9 +85,11 @@ public class CamAndGal extends AppCompatActivity {
                     }
                 });
 
+                // 다이얼로그에서 갤러리 선택
                 LinkGalleryBtn.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
+                        selectFromGalleryIntent();
                         dialog.dismiss();
                     }
                 });
@@ -94,7 +100,7 @@ public class CamAndGal extends AppCompatActivity {
 
     }
 
-
+    // 카메라 intent 연결하는 함수
     private void dispatchTakePictureIntent() {
         Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
@@ -112,15 +118,6 @@ public class CamAndGal extends AppCompatActivity {
         }
     }
 
-    //권한 요청
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        Log.d("Permission", "onRequestPermissionsResult");
-        if (grantResults[0] == PackageManager.PERMISSION_GRANTED && grantResults[1] == PackageManager.PERMISSION_GRANTED ) {
-            Log.d("Permission", "Permission: " + permissions[0] + "was " + grantResults[0]);
-        }
-    }
 
     // 화면에 이미지 가져오는 함수
     @Override
@@ -128,6 +125,7 @@ public class CamAndGal extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         try {
             switch (requestCode) {
+                // 카메라로 찍은 이미지 불러오는 경우
                 case REQUEST_TAKE_PHOTO: {
                     if (resultCode == RESULT_OK) {
                         File file = new File(currentPhotoPath);
@@ -139,19 +137,30 @@ public class CamAndGal extends AppCompatActivity {
 
                         if (bitmap != null) {
                             ExifInterface ei = new ExifInterface(currentPhotoPath);
-                            int orientation = ei.getAttributeInt(ExifInterface.TAG_ORIENTATION,
-                                    ExifInterface.ORIENTATION_UNDEFINED);
+                            int orientation = ei.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED);
                             int exifDegree = exifOrientationToDegrees(orientation);
                             Log.d("각도", exifDegree+"");
                             Bitmap rotatedBitmap = rotateImage(bitmap, exifDegree);
                             imageView.setImageBitmap(rotatedBitmap);
-                            saveImage(rotatedBitmap);
+                            saveImage(rotatedBitmap);   // 갤러리에 저장하는 함수
                         }
                     }
                     break;
                 }
+                // 갤러리에서 이미지 불러오는 경우
                 case PICK_FROM_ALBUM :{
-
+                    if(resultCode == RESULT_OK){
+                        try{
+                            InputStream in = getContentResolver().openInputStream(data.getData());
+                            Log.d("인풋데이터", data.getData().toString()+"");
+                            Log.d("인풋스트림", in.toString()+"");
+                            Bitmap bitmap = BitmapFactory.decodeStream(in);
+                            in.close();
+                            imageView.setImageBitmap(bitmap);
+                        } catch (Exception e){
+                            e.printStackTrace();
+                        }
+                    }
                 }
             }
 
@@ -164,13 +173,9 @@ public class CamAndGal extends AppCompatActivity {
     private File createImageFile() throws IOException {
         // Create an image file name
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        String imageFileName =  timeStamp + "_test_";
+        imageFileName =  timeStamp + "_test";
         File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-        File image = File.createTempFile(
-                imageFileName,  /* prefix */
-                ".jpg",         /* suffix */
-                storageDir      /* directory */
-        );
+        File image = File.createTempFile(imageFileName, ".jpg", storageDir);
         Log.d("파일", image.toString());
         currentPhotoPath = image.getAbsolutePath();
         return image;
@@ -200,20 +205,11 @@ public class CamAndGal extends AppCompatActivity {
     }
 
     // 갤러리에 저장하는 함수
-    private void galleryAddPic() {
-        Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
-        File f = new File(currentPhotoPath);
-        Uri contentUri = Uri.fromFile(f);
-        mediaScanIntent.setData(contentUri);
-        this.sendBroadcast(mediaScanIntent);
-    }
-
     private void saveImage(Bitmap finalBitmap){
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        String imageFileName =  timeStamp + "_test.jpg";
+        String imageFileForGalName =  imageFileName + ".jpg";
         File myDir = new File(Environment.getExternalStorageDirectory().toString());
         myDir.mkdirs();
-        File file = new File(myDir, imageFileName);
+        File file = new File(myDir, imageFileForGalName);
         try{
             FileOutputStream out = new FileOutputStream(file);
             finalBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out);
@@ -230,6 +226,13 @@ public class CamAndGal extends AppCompatActivity {
 
     /* 갤러리 연결하기 */
 
+    // 갤러리 intent 연결하는 함수
+    private void selectFromGalleryIntent() {
+        Intent intent = new Intent();
+        intent.setType("image/*");
+        intent.setAction(Intent.ACTION_GET_CONTENT);
+        startActivityForResult(intent, PICK_FROM_ALBUM);
+    }
 
 
 

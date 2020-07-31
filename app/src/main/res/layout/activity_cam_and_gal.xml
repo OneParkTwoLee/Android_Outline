@@ -6,23 +6,31 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    tools:context=".CamAndGal">
+    tools:context=".CamAndGal"
+    android:layout_margin="10dp"
+    android:weightSum="10">
 
     <Button
         android:id="@+id/takePicBtn"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:text="사진 불러오기"
-        android:textSize="18dp"
-        android:layout_margin="10dp"/>
+        android:textSize="18dp"/>
 
     <ImageView
         android:id="@+id/imageView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_marginLeft="10dp"
-        android:layout_marginBottom="15dp"
-        android:layout_marginRight="10dp"
+        android:layout_height="0dp"
+        android:layout_weight="8"
         android:background="@android:color/darker_gray"/>
+
+    <Button
+        android:id="@+id/moveDataBtn"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:text="데이터 넘기기"
+        android:textSize="18dp"/>
 
 </LinearLayout>
